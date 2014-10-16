@@ -45,6 +45,17 @@
 # [**vpnaas_agent_config**]
 #   (optional) Manage configuration of vpn_agent.ini
 #
+# [**service_provider**]
+#   (optional) Manage neutron service provider statements in neutron.conf
+#   Syntax differs from other neutron types and resembles as follows:
+#     service_provider =>
+#       'service/service_name':
+#         value: 'driver.to.use'
+#   An example using hiera:
+#     service_provider:
+#       'LOADBALANCER/Haproxy':
+#         value: 'neutron.services.loadbalancer.drivers.haproxy.plugin_driver.HaproxyOnHostPluginDriver:default'
+#
 # [**plugin_linuxbridge_config**]
 #   (optional) Manage configuration of linuxbridge_conf.ini
 #
@@ -72,6 +83,7 @@ class neutron::config (
   $metadata_agent_config         = {},
   $metering_agent_config         = {},
   $vpnaas_agent_config           = {},
+  $service_provider_config       = {},
   $plugin_linuxbridge_config     = {},
   $plugin_cisco_db_conn_config   = {},
   $plugin_cisco_l2network_config = {},
@@ -88,6 +100,7 @@ class neutron::config (
   validate_hash($metadata_agent_config)
   validate_hash($metering_agent_config)
   validate_hash($vpnaas_agent_config)
+  validate_hash($service_provider_config)
   validate_hash($plugin_linuxbridge_config)
   validate_hash($plugin_cisco_db_conn_config)
   validate_hash($plugin_cisco_l2network_config)
@@ -102,6 +115,7 @@ class neutron::config (
   create_resources('neutron_metadata_agent_config', $metadata_agent_config)
   create_resources('neutron_metering_agent_config', $metering_agent_config)
   create_resources('neutron_vpnaas_agent_config', $vpnaas_agent_config)
+  create_resources('neutron_service_provider', $service_provider_config)
   create_resources('neutron_plugin_linuxbridge', $plugin_linuxbridge_config)
   create_resources('neutron_plugin_cisco_db_conn', $plugin_cisco_db_conn_config)
   create_resources('neutron_plugin_cisco_l2network', $plugin_cisco_l2network_config)
