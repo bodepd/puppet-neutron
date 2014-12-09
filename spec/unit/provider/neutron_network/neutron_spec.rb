@@ -21,6 +21,26 @@ describe provider_class do
     }
   end
 
+  describe 'when creating a network' do
+    let :resource do
+      Puppet::Type::Neutron_network.new(net_attrs)
+    end
+
+    let :provider do
+      provider_class.new(resource)
+    end
+    it 'should try again if prefetching errors out' do
+      provider_class.expects(:list_neutron_resources).with('net').twice.throws(Errno::ECONNRESET).then.returns(['123'])
+      provider_class.expects(:get_neutron_resource_attrs).with('net', '123').returns(
+        { 'name' => 'net1', 'ensure' => 'present' }
+      )
+      expect do
+        provider.exists?
+      end.to raise_error(RuntimeError)
+      provider.exists?.should be_true
+    end
+  end
+
   describe 'when updating a network' do
     let :resource do
       Puppet::Type::Neutron_network.new(net_attrs)
