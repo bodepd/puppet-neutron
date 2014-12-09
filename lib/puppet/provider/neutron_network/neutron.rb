@@ -20,34 +20,56 @@ Puppet::Type.type(:neutron_network).provide(
   end
 
   def self.instances
-    list_neutron_resources(neutron_type).collect do |id|
-      attrs = get_neutron_resource_attrs(neutron_type, id)
-      new(
-        :ensure                    => :present,
-        :name                      => attrs['name'],
-        :id                        => attrs['id'],
-        :admin_state_up            => attrs['admin_state_up'],
-        :provider_network_type     => attrs['provider:network_type'],
-        :provider_physical_network => attrs['provider:physical_network'],
-        :provider_segmentation_id  => attrs['provider:segmentation_id'],
-        :router_external           => attrs['router:external'],
-        :shared                    => attrs['shared'],
-        :tenant_id                 => attrs['tenant_id']
-      )
+    existing_resources_as_hash.values.collect do |resource_hash|
+      new(resource_hash)
     end
   end
 
-  def self.prefetch(resources)
-    networks = instances
-    resources.keys.each do |name|
-      if provider = networks.find{ |net| net.name == name }
-        resources[name].provider = provider
+  def self.existing_resources_as_hash()
+    @existing_resources ||= begin
+      resources_hash = {}
+      begin
+        list_neutron_resources(neutron_type).each do |id|
+          attrs = get_neutron_resource_attrs(neutron_type, id)
+          resources_hash[attrs['name']] =
+            {
+              :ensure                    => :present,
+              :name                      => attrs['name'],
+              :id                        => attrs['id'],
+              :admin_state_up            => attrs['admin_state_up'],
+              :provider_network_type     => attrs['provider:network_type'],
+              :provider_physical_network => attrs['provider:physical_network'],
+              :provider_segmentation_id  => attrs['provider:segmentation_id'],
+              :router_external           => attrs['router:external'],
+              :shared                    => attrs['shared'],
+              :tenant_id                 => attrs['tenant_id']
+            }
+        end
+      rescue StandardError => e
+        fail("Caught unexpected exception: #{e}: #{e.message}")
       end
+      resources_hash
     end
+  end
+
+  def self.add_existing_resource(name, hash)
+    unless @existing_resources.class == Hash
+      fail("Cannot add to uninitialized resource hash")
+    end
+    @existing_resources[name]=hash
+  end
+
+  def add_existing_instance(name, hash)
+    self.class.add_existing_resource(name, hash)
+  end
+
+  def existing_resource
+    puts self.class.existing_resources_as_hash.inspect
+    self.class.existing_resources_as_hash[resource[:name]] || {}
   end
 
   def exists?
-    @property_hash[:ensure] == :present
+    existing_resource[:ensure] == :present
   end
 
   def create
@@ -89,18 +111,21 @@ Puppet::Type.type(:neutron_network).provide(
 
     if results =~ /Created a new network:/
       attrs = self.class.parse_creation_output(results)
-      @property_hash = {
-        :ensure                    => :present,
-        :name                      => resource[:name],
-        :id                        => attrs['id'],
-        :admin_state_up            => attrs['admin_state_up'],
-        :provider_network_type     => attrs['provider:network_type'],
-        :provider_physical_network => attrs['provider:physical_network'],
-        :provider_segmentation_id  => attrs['provider:segmentation_id'],
-        :router_external           => attrs['router:external'],
-        :shared                    => attrs['shared'],
-        :tenant_id                 => attrs['tenant_id'],
-      }
+      add_existing_instance(
+        resource[:name],
+        {
+          :ensure                    => :present,
+          :name                      => resource[:name],
+          :id                        => attrs['id'],
+          :admin_state_up            => attrs['admin_state_up'],
+          :provider_network_type     => attrs['provider:network_type'],
+          :provider_physical_network => attrs['provider:physical_network'],
+          :provider_segmentation_id  => attrs['provider:segmentation_id'],
+          :router_external           => attrs['router:external'],
+          :shared                    => attrs['shared'],
+          :tenant_id                 => attrs['tenant_id'],
+        }
+      )
     else
       fail("did not get expected message on network creation, got #{results}")
     end
@@ -108,7 +133,7 @@ Puppet::Type.type(:neutron_network).provide(
 
   def destroy
     auth_neutron('net-delete', name)
-    @property_hash[:ensure] = :absent
+    existing_resource[:ensure] = :absent
   end
 
   def admin_state_up=(value)
